@@ -3,25 +3,44 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#F5E8D0"
     android:orientation="vertical"
-    android:padding="24dp"
     android:gravity="center"
-    android:background="?android:attr/windowBackground">
+    android:padding="24dp">
 
     <TextView
-        android:id="@+id/welcomeText"
+        android:id="@+id/title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Καλώς ήρθατε στο Θέατρο!"
-        android:textSize="24sp"
+        android:text="Καλώς Ορίσατε στο Theater Assistant"
+        android:textSize="22sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp" />
+        android:textColor="#000000"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/subtitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Σχεδιασμένο για να κάνει τις κρατήσεις παραστάσεων απλές"
+        android:textSize="14sp"
+        android:textColor="#333333"
+        android:layout_marginBottom="24dp" />
+
+    <ImageView
+        android:id="@+id/theaterImage"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:src="@drawable/theater_logo"
+        android:layout_marginBottom="36dp" />
 
     <Button
         android:id="@+id/startChatButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Έναρξη Διαλόγου"
-        android:textAllCaps="false"
-        android:textSize="18sp" />
+        android:text="ΕΝΑΡΞΗ ΣΥΝΟΜΙΛΙΑΣ"
+        android:textStyle="bold"
+        android:textColor="#000000"
+        android:backgroundTint="#FFA726"
+        android:padding="12dp" />
 </LinearLayout>

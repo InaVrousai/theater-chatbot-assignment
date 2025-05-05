@@ -2,17 +2,27 @@ package com.example.theaterapp;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
-import android.widget.*;
+import android.widget.EditText;
+import android.widget.ImageButton;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ChatActivity extends AppCompatActivity {
 
     EditText inputField;
-    Button sendButton;
-    TextView chatBox;
+    ImageButton sendButton;
+    RecyclerView chatRecyclerView;
+    List<ChatMessage> messageList = new ArrayList<>();
+    ChatAdapter adapter;
 
-    StringBuilder chatHistory = new StringBuilder();
     SharedPreferences prefs;
+
+    private String pendingAction = null;
+    private String tempBooking = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,9 +31,15 @@ public class ChatActivity extends AppCompatActivity {
 
         inputField = findViewById(R.id.inputField);
         sendButton = findViewById(R.id.sendButton);
-        chatBox = findViewById(R.id.chatBox);
+        chatRecyclerView = findViewById(R.id.chatRecyclerView);
 
         prefs = getSharedPreferences("Bookings", MODE_PRIVATE);
+
+        adapter = new ChatAdapter(messageList);
+        chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        chatRecyclerView.setAdapter(adapter);
+
+        appendMessage("Πώς μπορώ να βοηθήσω;", false);
 
         sendButton.setOnClickListener(v -> handleMessage());
     }
@@ -32,56 +48,81 @@ public class ChatActivity extends AppCompatActivity {
         String userMessage = inputField.getText().toString().trim();
         if (userMessage.isEmpty()) return;
 
-        appendMessage("You: " + userMessage);
+        appendMessage(userMessage, true);
         inputField.setText("");
 
-        String response = generateResponse(userMessage);
-        appendMessage("Theater: " + response);
+        String response = generateResponse(userMessage.toLowerCase());
+        appendMessage(response, false);
     }
 
     private String generateResponse(String msg) {
-        msg = msg.toLowerCase();
-
-        if (msg.contains("info") || msg.contains("shows") || msg.contains("available")) {
-            return getShowInfo();
-        }
-
-        if (msg.contains("book") || msg.contains("reserve") || msg.contains("ticket")) {
-            if (msg.contains("oedipus")) {
-                saveBooking("Oedipus Rex - Hall 1 - 18:00");
-                return "Your booking for 'Oedipus Rex' at 18:00 is confirmed.";
-            } else if (msg.contains("antigone")) {
-                saveBooking("Antigone - Hall 2 - 17:30");
-                return "Your booking for 'Antigone' at 17:30 is confirmed.";
-            } else if (msg.contains("medea")) {
-                saveBooking("Medea - Hall 1 - 20:00");
-                return "Your booking for 'Medea' at 20:00 is confirmed.";
+        if (pendingAction != null) {
+            if (msg.contains("ναι")) {
+                if (pendingAction.equals("book") && tempBooking != null) {
+                    saveBooking(tempBooking);
+                    resetConfirmationState();
+                    return "Η κράτησή σας καταχωρήθηκε: " + tempBooking;
+                } else if (pendingAction.equals("cancel")) {
+                    removeBooking();
+                    resetConfirmationState();
+                    return "Η κράτησή σας ακυρώθηκε.";
+                }
+            } else if (msg.contains("όχι")) {
+                resetConfirmationState();
+                return "Η ενέργεια ακυρώθηκε.";
             } else {
-                return "Which show would you like to book? Try: 'Oedipus', 'Antigone', or 'Medea'.";
+                return "Παρακαλώ απαντήστε με 'ναι' ή 'όχι'.";
             }
         }
 
-        if (msg.contains("cancel")) {
-            removeBooking();
-            return "Your booking has been cancelled.";
+        if (msg.contains("πληροφορίες") || msg.contains("παραστάσεις") || msg.contains("διαθέσιμες")) {
+            return getShowInfo();
         }
 
-        if (msg.contains("booking") || msg.contains("reservation")) {
+        if (msg.contains("κλείσε") || msg.contains("κράτηση") || msg.contains("εισιτήριο")) {
+            if (msg.contains("οιδίπους")) {
+                tempBooking = "Οιδίπους Τύραννος - Αίθουσα 1 - 18:00";
+            } else if (msg.contains("αντιγόνη")) {
+                tempBooking = "Αντιγόνη - Αίθουσα 2 - 17:30";
+            } else if (msg.contains("μήδεια")) {
+                tempBooking = "Μήδεια - Αίθουσα 1 - 20:00";
+            } else {
+                return "Για ποια παράσταση θέλετε να κάνετε κράτηση; Π.χ. 'Οιδίπους', 'Αντιγόνη', 'Μήδεια'";
+            }
+            pendingAction = "book";
+            return "Επιβεβαιώνετε την κράτηση για: " + tempBooking + "; (ναι / όχι)";
+        }
+
+        if (msg.contains("ακύρωσε") || msg.contains("ακύρωση")) {
+            if (prefs.contains("latestBooking")) {
+                pendingAction = "cancel";
+                return "Είστε σίγουροι ότι θέλετε να ακυρώσετε την κράτησή σας; (ναι / όχι)";
+            } else {
+                return "Δεν υπάρχει κράτηση για ακύρωση.";
+            }
+        }
+
+        if (msg.contains("κράτηση") || msg.contains("κρατήσεις")) {
             return getBooking();
         }
 
-        if (msg.contains("help") || msg.contains("human")) {
-            return "Connecting you to a theater representative...";
+        if (msg.contains("βοήθεια") || msg.contains("υπάλληλος")) {
+            return "Σας συνδέουμε με έναν εκπρόσωπο του θεάτρου...";
         }
 
-        return "Sorry, I didn't understand that. You can ask for show info or book a ticket for 'Oedipus', 'Antigone', or 'Medea'.";
+        return "Συγγνώμη, δεν κατάλαβα. Θέλετε να δείτε [πληροφορίες], να κάνετε [κράτηση], να [ακυρώσετε] ή να μιλήσετε με [υπάλληλο];";
+    }
+
+    private void resetConfirmationState() {
+        pendingAction = null;
+        tempBooking = null;
     }
 
     private String getShowInfo() {
-        return "🎭 Available Shows:\n" +
-                "1. Oedipus Rex - Hall 1 - 18:00 & 21:00\n" +
-                "2. Antigone - Hall 2 - 17:30 & 20:30\n" +
-                "3. Medea - Hall 1 - 20:00";
+        return "🎭 Διαθέσιμες Παραστάσεις:\n" +
+                "1. Οιδίπους Τύραννος - Αίθουσα 1 - 18:00 & 21:00\n" +
+                "2. Αντιγόνη - Αίθουσα 2 - 17:30 & 20:30\n" +
+                "3. Μήδεια - Αίθουσα 1 - 20:00";
     }
 
     private void saveBooking(String data) {
@@ -94,11 +135,12 @@ public class ChatActivity extends AppCompatActivity {
 
     private String getBooking() {
         String data = prefs.getString("latestBooking", null);
-        return data != null ? "Your current booking: " + data : "You have no active bookings.";
+        return data != null ? "Η ενεργή κράτησή σας είναι: " + data : "Δεν έχετε κάποια ενεργή κράτηση.";
     }
 
-    private void appendMessage(String text) {
-        chatHistory.append(text).append("\n\n");
-        chatBox.setText(chatHistory.toString());
+    private void appendMessage(String text, boolean isUser) {
+        messageList.add(new ChatMessage(text, isUser));
+        adapter.notifyItemInserted(messageList.size() - 1);
+        chatRecyclerView.scrollToPosition(messageList.size() - 1);
     }
 }
