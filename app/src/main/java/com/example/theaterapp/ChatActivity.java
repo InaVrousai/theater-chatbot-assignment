@@ -2,8 +2,16 @@ package com.example.theaterapp;
 
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -14,15 +22,16 @@ import java.util.List;
 public class ChatActivity extends AppCompatActivity {
 
     EditText inputField;
-    ImageButton sendButton;
-    RecyclerView chatRecyclerView;
-    List<ChatMessage> messageList = new ArrayList<>();
-    ChatAdapter adapter;
+    Button sendButton;
+    LinearLayout chatContainer;
+    ScrollView chatScroll;
 
     SharedPreferences prefs;
 
     private String pendingAction = null;
     private String tempBooking = null;
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -31,14 +40,12 @@ public class ChatActivity extends AppCompatActivity {
 
         inputField = findViewById(R.id.inputField);
         sendButton = findViewById(R.id.sendButton);
-        chatRecyclerView = findViewById(R.id.chatRecyclerView);
+        chatContainer = findViewById(R.id.chatContainer);
+        chatScroll = (ScrollView) chatContainer.getParent();
 
         prefs = getSharedPreferences("Bookings", MODE_PRIVATE);
 
-        adapter = new ChatAdapter(messageList);
-        chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
-        chatRecyclerView.setAdapter(adapter);
-
+        // initial bot greeting
         appendMessage("Πώς μπορώ να βοηθήσω;", false);
 
         sendButton.setOnClickListener(v -> handleMessage());
@@ -139,8 +146,22 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void appendMessage(String text, boolean isUser) {
-        messageList.add(new ChatMessage(text, isUser));
-        adapter.notifyItemInserted(messageList.size() - 1);
-        chatRecyclerView.scrollToPosition(messageList.size() - 1);
+        // inflate message item
+        View bubble = LayoutInflater.from(this).inflate(R.layout.item_message, chatContainer, false);
+        TextView messageText = bubble.findViewById(R.id.messageText);
+        messageText.setText(text);
+        // apply background and alignment
+        if (isUser) {
+            messageText.setBackgroundResource(R.drawable.bubble_user);
+        } else {
+            messageText.setBackgroundResource(R.drawable.bubble_theater);
+        }
+        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) messageText.getLayoutParams();
+        params.gravity = isUser ? Gravity.END : Gravity.START;
+        messageText.setLayoutParams(params);
+        // add to container
+        chatContainer.addView(bubble);
+        // scroll to bottom
+        chatScroll.post(() -> chatScroll.fullScroll(View.FOCUS_DOWN));
     }
 }
