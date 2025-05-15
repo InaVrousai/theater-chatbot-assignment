@@ -6,24 +6,22 @@
     android:layout_height="match_parent">
 
 
-    <ScrollView
+    <!-- RecyclerView takes the place of ScrollView + chatContainer -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/chatRecycler"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:fillViewport="true">
+        android:clipToPadding="false"
+        android:paddingBottom="8dp"
+        android:overScrollMode="never"/>
 
-        <LinearLayout
-            android:id="@+id/chatContainer"
-            android:orientation="vertical"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"/>
-    </ScrollView>
-
-
+    <!-- Input row remains unchanged -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp">
 
         <EditText
             android:id="@+id/inputField"

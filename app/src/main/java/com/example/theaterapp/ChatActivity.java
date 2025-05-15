@@ -23,8 +23,9 @@ public class ChatActivity extends AppCompatActivity {
 
     EditText inputField;
     Button sendButton;
-    LinearLayout chatContainer;
-    ScrollView chatScroll;
+    private RecyclerView chatRecycler;
+    private List<ChatMessage> messages;
+    private ChatAdapter adapter;
 
     SharedPreferences prefs;
 
@@ -40,8 +41,13 @@ public class ChatActivity extends AppCompatActivity {
 
         inputField = findViewById(R.id.inputField);
         sendButton = findViewById(R.id.sendButton);
-        chatContainer = findViewById(R.id.chatContainer);
-        chatScroll = (ScrollView) chatContainer.getParent();
+        chatRecycler = findViewById(R.id.chatRecycler);
+
+        // Initialize message list and adapter
+        messages = new ArrayList<>();
+        adapter = new ChatAdapter(messages);
+        chatRecycler.setLayoutManager(new LinearLayoutManager(this));
+        chatRecycler.setAdapter(adapter);
 
         prefs = getSharedPreferences("Bookings", MODE_PRIVATE);
 
@@ -146,22 +152,9 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void appendMessage(String text, boolean isUser) {
-        // inflate message item
-        View bubble = LayoutInflater.from(this).inflate(R.layout.item_message, chatContainer, false);
-        TextView messageText = bubble.findViewById(R.id.messageText);
-        messageText.setText(text);
-        // apply background and alignment
-        if (isUser) {
-            messageText.setBackgroundResource(R.drawable.bubble_user);
-        } else {
-            messageText.setBackgroundResource(R.drawable.bubble_theater);
-        }
-        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) messageText.getLayoutParams();
-        params.gravity = isUser ? Gravity.END : Gravity.START;
-        messageText.setLayoutParams(params);
-        // add to container
-        chatContainer.addView(bubble);
-        // scroll to bottom
-        chatScroll.post(() -> chatScroll.fullScroll(View.FOCUS_DOWN));
+        messages.add(new ChatMessage(text, isUser));
+        adapter.notifyItemInserted(messages.size() - 1);
+        chatRecycler.scrollToPosition(messages.size() - 1);
     }
+
 }
