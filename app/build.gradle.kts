@@ -3,20 +3,10 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
 }
-val hfApiKey: String by lazy {
-    val props = Properties()
 
-    val localProperties = rootProject.file("local.properties")
-    if (localProperties.exists()) {
-        props.load(localProperties.inputStream())
-        props.getProperty("HF_API_KEY") ?: error("HF_API_KEY not found in local.properties")
-    } else {
-        error("local.properties file not found")
-    }
-}
 
-println("Loaded HF_API_KEY: $hfApiKey")
-val OPENAI_API_KEY: String by project
+
+val WIT_AI_SERVER_TOKEN: String by project
 
 android {
     namespace = "com.example.theaterapp"
@@ -35,8 +25,8 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        buildConfigField("String", "OPENAI_API_KEY", "\"$OPENAI_API_KEY\"")
-        buildConfigField("String", "HF_API_KEY", "\"$hfApiKey\"")
+        buildConfigField("String", "WIT_AI_SERVER_TOKEN", "\"$WIT_AI_SERVER_TOKEN\"")
+
     }
 
     buildTypes {

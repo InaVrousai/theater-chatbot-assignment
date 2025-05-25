@@ -5,25 +5,25 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageButton;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.example.theaterapp.api.LlamaService;
-import com.google.gson.Gson;
-
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.example.theaterapp.api.WitResponse;
+import com.example.theaterapp.api.WitService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
+import okhttp3.OkHttpClient;
+import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.*;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ChatActivity extends AppCompatActivity {
+    private static final String TAG = "ChatActivity";
 
     EditText inputField;
     Button sendButton;
@@ -35,9 +35,9 @@ public class ChatActivity extends AppCompatActivity {
     private String pendingAction = null;
     private String tempBooking = null;
 
-    Retrofit retrofit;
-    LlamaService llamaService;
-    Gson gson = new Gson();
+    // Retrofit + logging interceptor for Wit.ai
+    private WitService witService;
+    private final String WIT_TOKEN = "Bearer " + BuildConfig.WIT_AI_SERVER_TOKEN;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -55,13 +55,21 @@ public class ChatActivity extends AppCompatActivity {
 
         appendMessage("Πώς μπορώ να βοηθήσω;", false);
 
-        retrofit = new Retrofit.Builder()
-                .baseUrl("https://api-inference.huggingface.co/")
+        // Setup Retrofit + logging for Wit.ai
+        HttpLoggingInterceptor logInterceptor = new HttpLoggingInterceptor()
+                .setLevel(HttpLoggingInterceptor.Level.BODY);
 
+        OkHttpClient client = new OkHttpClient.Builder()
+                .addInterceptor(logInterceptor)
+                .build();
+
+        Retrofit witRetrofit = new Retrofit.Builder()
+                .baseUrl("https://api.wit.ai/")
+                .client(client)
                 .addConverterFactory(GsonConverterFactory.create())
                 .build();
 
-        llamaService = retrofit.create(LlamaService.class);
+        witService = witRetrofit.create(WitService.class);
 
         sendButton.setOnClickListener(v -> handleMessage());
     }
@@ -73,90 +81,72 @@ public class ChatActivity extends AppCompatActivity {
         appendMessage(userMessage, true);
         inputField.setText("");
 
-        callLlamaAPI(userMessage);
+        callWitAI(userMessage);
     }
 
-    private void callLlamaAPI(String userInput) {
-        String prompt = "You are a Greek theater booking assistant. Respond ONLY in valid JSON like:\n" +
-                "{ \"intent\": \"info\", \"show\": null, \"confirmation_required\": false }\n" +
-                "Possible intents: info, book, cancel, confirm_yes, confirm_no, help, booking_status.\n\n" +
-                "User: " + userInput;
-
-        LlamaRequest request = new LlamaRequest(prompt);
-        String apiKey = BuildConfig.HF_API_KEY;
-
-        llamaService.getChatCompletion("Bearer " + apiKey, request).enqueue(new Callback<LlamaResponse>()
-        {
-            @Override
-            public void onResponse(Call<LlamaResponse> call, Response<LlamaResponse> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String raw = response.body().generated_text.trim();
-                    Log.d("LLaMA_RAW", raw);
-                    try {
-                        JSONObject obj = new JSONObject(raw);
-                        String intent = obj.getString("intent");
-                        String show = obj.optString("show", null);
-                        boolean confirmation = obj.optBoolean("confirmation_required", false);
-                        appendMessage(generateBotReply(intent, show, confirmation), false);
-                    } catch (JSONException e) {
-                        Log.e("LLaMA_PARSE", "Invalid JSON", e);
-                        appendMessage("⚠️ Δεν κατάλαβα την απάντηση.", false);
+    private void callWitAI(String userInput) {
+        witService.getMessage("20230608", userInput, WIT_TOKEN)
+                .enqueue(new Callback<WitResponse>() {
+                    @Override
+                    public void onResponse(Call<WitResponse> call, Response<WitResponse> resp) {
+                        if (resp.isSuccessful() && resp.body() != null) {
+                            WitResponse wr = resp.body();
+                            String intent = wr.intents.isEmpty()
+                                    ? "none"
+                                    : wr.intents.get(0).name;
+                            handleWitIntent(intent, wr.entities);
+                        } else {
+                            Log.e(TAG, "Wit.ai bad response: " + resp.code());
+                            appendMessage("⚠️ Σφάλμα από Wit.ai", false);
+                        }
                     }
-                } else {
-                    Log.e("LLaMA_API", "Bad response: " + response.code());
-                    appendMessage("⚠️ Σφάλμα από τον LLaMA API.", false);
-                }
-            }
 
-
-            @Override
-            public void onFailure(Call<LlamaResponse> call, Throwable t) {
-                Log.e("LLaMA_FAIL", "Call failed", t);
-                appendMessage("⚠️ Αποτυχία σύνδεσης με LLaMA.", false);
-            }
-
-        });
-
+                    @Override
+                    public void onFailure(Call<WitResponse> call, Throwable t) {
+                        Log.e(TAG, "Wit.ai call failed", t);
+                        appendMessage("⚠️ Αποτυχία σύνδεσης με Wit.ai", false);
+                    }
+                });
     }
 
-
-
-    private String generateBotReply(String intent, String show, boolean confirmation) {
+    private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
         switch (intent) {
             case "info":
-                return getShowInfo();
-            case "book":
-                if (show == null) return "Για ποια παράσταση θέλετε να κάνετε κράτηση;";
-                tempBooking = show + " - ώρα και αίθουσα TBD";
-                pendingAction = "book";
-                return confirmation ? "Επιβεβαιώνετε την κράτηση για: " + tempBooking + "; (ναι / όχι)" : "Η κράτηση έγινε για: " + tempBooking;
-            case "cancel":
+                appendMessage(getShowInfo(), false);
+                break;
+            case "book_ticket":
+                appendMessage("Για ποια παράσταση θέλετε να κάνετε κράτηση;", false);
+                break;
+            case "cancel_ticket":
                 if (prefs.contains("latestBooking")) {
                     pendingAction = "cancel";
-                    return "Είστε σίγουροι ότι θέλετε να ακυρώσετε την κράτησή σας; (ναι / όχι)";
+                    appendMessage("Είστε σίγουροι ότι θέλετε να ακυρώσετε την κράτησή σας; (ναι/όχι)", false);
                 } else {
-                    return "Δεν υπάρχει κράτηση για ακύρωση.";
+                    appendMessage("Δεν έχετε κάποια κράτηση για ακύρωση.", false);
                 }
+                break;
             case "confirm_yes":
                 if ("book".equals(pendingAction)) {
                     saveBooking(tempBooking);
                     resetConfirmationState();
-                    return "Η κράτησή σας επιβεβαιώθηκε!";
+                    appendMessage("Η κράτησή σας επιβεβαιώθηκε!", false);
                 } else if ("cancel".equals(pendingAction)) {
                     removeBooking();
                     resetConfirmationState();
-                    return "Η κράτηση ακυρώθηκε.";
+                    appendMessage("Η κράτηση ακυρώθηκε.", false);
+                } else {
+                    appendMessage("Δεν υπάρχει ενέργεια προς επιβεβαίωση.", false);
                 }
-                return "Δεν υπάρχει ενέργεια προς επιβεβαίωση.";
+                break;
             case "confirm_no":
                 resetConfirmationState();
-                return "Η ενέργεια ακυρώθηκε.";
-            case "help":
-                return "Σας συνδέουμε με έναν εκπρόσωπο...";
+                appendMessage("Η ενέργεια ακυρώθηκε.", false);
+                break;
             case "booking_status":
-                return getBooking();
+                appendMessage(getBooking(), false);
+                break;
             default:
-                return "Δεν κατάλαβα. Θέλετε να κάνετε κράτηση, ακύρωση ή να δείτε παραστάσεις;";
+                appendMessage("Δεν κατάλαβα. Δοκιμάστε ξανά.", false);
         }
     }
 
@@ -182,7 +172,9 @@ public class ChatActivity extends AppCompatActivity {
 
     private String getBooking() {
         String data = prefs.getString("latestBooking", null);
-        return data != null ? "Η ενεργή κράτησή σας είναι: " + data : "Δεν έχετε κάποια ενεργή κράτηση.";
+        return data != null
+                ? "Η ενεργή κράτησή σας είναι: " + data
+                : "Δεν έχετε κάποια ενεργή κράτηση.";
     }
 
     private void appendMessage(String text, boolean isUser) {
