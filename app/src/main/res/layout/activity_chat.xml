@@ -5,8 +5,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-
-    <!-- RecyclerView takes the place of ScrollView + chatContainer -->
+    <!-- Chat messages -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/chatRecycler"
         android:layout_width="match_parent"
@@ -16,7 +15,16 @@
         android:paddingBottom="8dp"
         android:overScrollMode="never"/>
 
-    <!-- Input row remains unchanged -->
+    <!-- Quick replies container -->
+    <LinearLayout
+        android:id="@+id/quickRepliesLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"/>
+
+    <!-- Input row -->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"

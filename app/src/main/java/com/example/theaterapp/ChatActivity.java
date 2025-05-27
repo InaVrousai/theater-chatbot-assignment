@@ -3,8 +3,10 @@ package com.example.theaterapp;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -17,6 +19,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Collections;
+
 
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
@@ -41,6 +45,7 @@ public class ChatActivity extends AppCompatActivity {
     private final String WIT_VERSION = "20250527";
     private final String WIT_TOKEN = "Bearer " + BuildConfig.WIT_AI_SERVER_TOKEN;
 
+    private LinearLayout quickRepliesLayout;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -54,8 +59,10 @@ public class ChatActivity extends AppCompatActivity {
         adapter = new ChatAdapter(messageList);
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatRecyclerView.setAdapter(adapter);
+        quickRepliesLayout = findViewById(R.id.quickRepliesLayout);
 
         appendMessage("Πώς μπορώ να βοηθήσω;", false);
+        showQuickReplies();
 
         // Setup Retrofit + logging for Wit.ai
         HttpLoggingInterceptor logInterceptor = new HttpLoggingInterceptor()
@@ -73,8 +80,51 @@ public class ChatActivity extends AppCompatActivity {
 
         witService = witRetrofit.create(WitService.class);
 
-        sendButton.setOnClickListener(v -> handleMessage());
+        sendButton.setOnClickListener(v -> {
+            // disable quick replies when typing
+            quickRepliesLayout.setVisibility(View.GONE);
+            handleMessage();
+        });
     }
+
+    private void showQuickReplies() {
+        quickRepliesLayout.removeAllViews();
+        String[] options = new String[]{
+                "Πληροφορίες παραστάσεων",
+                "Κράτηση εισιτηρίου",
+                "Ακύρωση εισιτηρίου",
+                "Επικοινωνία με υπάλληλο"
+    };
+    for (String opt : options) {
+        Button btn = new Button(this);
+        btn.setText(opt);
+        btn.setAllCaps(false);
+        btn.setOnClickListener(v -> {
+            quickRepliesLayout.setVisibility(View.GONE);
+            appendMessage(opt, true);
+            // χειρισμός χωρίς free-text
+            switch (opt) {
+                case "Πληροφορίες παραστάσεων":
+                    handleWitIntent("seeSchedule", Collections.emptyMap());
+                    break;
+                case "Κράτηση εισιτήριο":
+                case "Κράτηση εισιτηρίου":
+                    handleWitIntent("makeReservation", Collections.emptyMap());
+                    break;
+                case "Ακύρωση εισιτηρίου":
+                    handleWitIntent("cancelReservation", Collections.emptyMap());
+                    break;
+                case "Επικοινωνία με υπάλληλο":
+                    handleWitIntent("contactStaff", Collections.emptyMap());
+                    break;
+            }
+        });
+        quickRepliesLayout.addView(btn);
+    }
+    quickRepliesLayout.setVisibility(View.VISIBLE);
+}
+
+
 
     private void handleMessage() {
         String userMessage = inputField.getText().toString().trim();
@@ -100,6 +150,7 @@ public class ChatActivity extends AppCompatActivity {
                         } else {
                             Log.e(TAG, "Wit.ai bad response: " + resp.code());
                             appendMessage("⚠️ Σφάλμα από Wit.ai", false);
+                            showQuickReplies();
                         }
                     }
 
@@ -107,68 +158,42 @@ public class ChatActivity extends AppCompatActivity {
                     public void onFailure(Call<WitResponse> call, Throwable t) {
                         Log.e(TAG, "Wit.ai call failed", t);
                         appendMessage("⚠️ Αποτυχία σύνδεσης με Wit.ai", false);
+                        showQuickReplies();
                     }
                 });
     }
 
-    private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
-        switch (intent) {
-            case "seeSchedule": {
-                // Ελέγχουμε εάν έχουμε date entity
-                if (entities.containsKey("wit$datetime:datetime")) {
-                    String date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
-                    showScheduleFor(date);
-                } else {
-                    showScheduleAll();
-                }
-                break;
+private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
+    switch (intent) {
+        case "seeSchedule":
+            if (entities.containsKey("wit$datetime:datetime")) {
+                String date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
+                showScheduleFor(date);
+            } else {
+                showScheduleAll();
             }
-            case "makeReservation": {
-                String date = null, showName = null;
-                Integer count = null;
-                if (entities.containsKey("wit$datetime:datetime")) {
-                    date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
-                }
-                if (entities.containsKey("show_name:show_name")) {
-                    showName = entities.get("show_name:show_name").get(0).body;
-                }
-                if (entities.containsKey("wit$number:number")) {
-                    count = Integer.valueOf(entities.get("wit$number:number").get(0).body);
-                }
-                if (date != null && showName != null && count != null) {
-                    doReservation(showName, count, date);
-                } else {
-                    appendMessage("Για την κράτηση, πες μου τίτλο παράστασης, ημερομηνία και αριθμό εισιτηρίων.", false);
-                }
-                break;
-            }
-            case "cancelReservation": {
-                if (entities.containsKey("reservation:reservation")) {
-                    String resId = entities.get("reservation:reservation").get(0).body;
-                    cancelReservation(resId);
-                } else {
-                    appendMessage("Δώσε τον κωδικό της κράτησης που θες να ακυρώσεις.", false);
-                }
-                break;
-            }
-            case "contactStaff": {
-                if (entities.containsKey("employee:employee")) {
-                    String dept = entities.get("employee:employee").get(0).body;
-                    showContactStaff(dept);
-                } else {
-                    appendMessage("Ποιον υπεύθυνο θες να επικοινωνήσεις; (π.χ. ταμείο, διοίκηση)", false);
-                }
-                break;
-            }
-            default:
-                appendMessage("Δεν σε κατάλαβα, δοκίμασε ξανά.", false);
-        }
+            break;
+        case "makeReservation":
+            appendMessage("Για ποια παράσταση θέλετε να κάνετε κράτηση;", false);
+            break;
+        case "cancelReservation":
+            appendMessage("Παρακαλώ δώστε τον κωδικό κράτησης για ακύρωση.", false);
+            break;
+        case "contactStaff":
+            appendMessage("Παρακαλώ επιλέξτε υπάλληλο: ταμείο ή διοίκηση.", false);
+            break;
+        default:
+            appendMessage("Δεν σε κατάλαβα, δοκίμασε ξανά.", false);
     }
+    // μετά από κάθε bot response, εμφάνισε ξανά επιλογές
+    showQuickReplies();
+}
 
-    private void resetConfirmationState() {
-        pendingAction = null;
-        tempBooking = null;
-    }
+
+//    private void resetConfirmationState() {
+//        pendingAction = null;
+//        tempBooking = null;
+//    }
 
     private void showScheduleAll() {
         appendMessage("🎭 Το πρόγραμμα των παραστάσεων για αυτή την εβδομάδα:\n" +
