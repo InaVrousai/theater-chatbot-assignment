@@ -16,6 +16,7 @@ import com.example.theaterapp.api.WitResponse;
 import com.example.theaterapp.api.WitService;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -107,7 +108,6 @@ public class ChatActivity extends AppCompatActivity {
                 case "Πληροφορίες παραστάσεων":
                     handleWitIntent("seeSchedule", Collections.emptyMap());
                     break;
-                case "Κράτηση εισιτήριο":
                 case "Κράτηση εισιτηρίου":
                     handleWitIntent("makeReservation", Collections.emptyMap());
                     break;
@@ -123,6 +123,98 @@ public class ChatActivity extends AppCompatActivity {
     }
     quickRepliesLayout.setVisibility(View.VISIBLE);
 }
+
+
+    private void onQuickReplyClicked(String text) {
+        appendMessage(text, true);
+        quickRepliesLayout.setVisibility(View.GONE);
+
+        if ("selectShow".equals(pendingAction)) {
+            // ο χρήστης διάλεξε παράσταση
+            showTimeButtons(text);
+
+        } else if ("selectTime".equals(pendingAction)) {
+            // ο χρήστης διάλεξε ώρα
+            String showName = tempBooking;
+            String time = text;
+            pendingAction = null;
+            tempBooking = null;
+            appendMessage("Επιλέξατε: " + showName + " στις " + time, false);
+
+            // εδώ μπορείς να ζητήσεις και πλήθος εισιτηρίων, ή να κάνεις αμέσως κράτηση
+            // π.χ. doReservation(showName, 1, time);
+
+            showQuickReplies();
+        } else {
+            // fallback στην υπάρχουσα λογική
+            switch (text) {
+                case "Πληροφορίες παραστάσεων":
+                    handleWitIntent("seeSchedule", Collections.emptyMap());
+                    break;
+                case "Κράτηση εισιτηρίου":
+                    handleWitIntent("makeReservation", Collections.emptyMap());
+                    break;
+                case "Ακύρωση εισιτηρίου":
+                    handleWitIntent("cancelReservation", Collections.emptyMap());
+                    break;
+                case "Επικοινωνία με υπάλληλο":
+                    handleWitIntent("contactStaff", Collections.emptyMap());
+                    break;
+            }
+        }
+    }
+
+    private void showPerformanceButtons() {
+        pendingAction = "selectShow";
+        quickRepliesLayout.removeAllViews();
+
+        List<String> shows = Arrays.asList(
+                "Οιδίπους Τύραννος",
+                "Αντιγόνη",
+                "Μήδεια"
+        );
+
+        for (String show : shows) {
+            Button btn = new Button(this);
+            btn.setText(show);
+            btn.setAllCaps(false);
+            btn.setOnClickListener(v -> onQuickReplyClicked(show));
+            quickRepliesLayout.addView(btn);
+        }
+        quickRepliesLayout.setVisibility(View.VISIBLE);
+    }
+
+    // Εμφανίζει τα κουμπιά με τις διαθέσιμες ώρες για μια παράσταση
+    private void showTimeButtons(String showName) {
+        pendingAction = "selectTime";
+        tempBooking = showName;
+        quickRepliesLayout.removeAllViews();
+
+        // π.χ. σταθερό παράδειγμα, μπορείς να το φορτώσεις από API
+        List<String> times;
+        switch (showName) {
+            case "Αντιγόνη":
+                times = Arrays.asList("17:30", "20:30");
+                break;
+            case "Οιδίπους Τύραννος":
+                times = Arrays.asList("18:00", "21:00");
+                break;
+            case "Μήδεια":
+                times = Arrays.asList("20:00");
+                break;
+            default:
+                times = Collections.emptyList();
+        }
+
+        for (String t : times) {
+            Button btn = new Button(this);
+            btn.setText(t);
+            btn.setAllCaps(false);
+            btn.setOnClickListener(v -> onQuickReplyClicked(t));
+            quickRepliesLayout.addView(btn);
+        }
+        quickRepliesLayout.setVisibility(View.VISIBLE);
+    }
 
 
 
@@ -174,8 +266,8 @@ private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>
             }
             break;
         case "makeReservation":
-            appendMessage("Για ποια παράσταση θέλετε να κάνετε κράτηση;", false);
-            break;
+            showPerformanceButtons();
+            return;
         case "cancelReservation":
             appendMessage("Παρακαλώ δώστε τον κωδικό κράτησης για ακύρωση.", false);
             break;
