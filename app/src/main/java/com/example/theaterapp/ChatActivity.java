@@ -15,6 +15,7 @@ import com.example.theaterapp.api.WitService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import okhttp3.OkHttpClient;
@@ -37,6 +38,7 @@ public class ChatActivity extends AppCompatActivity {
 
     // Retrofit + logging interceptor for Wit.ai
     private WitService witService;
+    private final String WIT_VERSION = "20250527";
     private final String WIT_TOKEN = "Bearer " + BuildConfig.WIT_AI_SERVER_TOKEN;
 
     @Override
@@ -85,7 +87,7 @@ public class ChatActivity extends AppCompatActivity {
     }
 
     private void callWitAI(String userInput) {
-        witService.getMessage("20230608", userInput, WIT_TOKEN)
+        witService.getMessage(WIT_VERSION, userInput, WIT_TOKEN)
                 .enqueue(new Callback<WitResponse>() {
                     @Override
                     public void onResponse(Call<WitResponse> call, Response<WitResponse> resp) {
@@ -111,42 +113,55 @@ public class ChatActivity extends AppCompatActivity {
 
     private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
         switch (intent) {
-            case "info":
-                appendMessage(getShowInfo(), false);
-                break;
-            case "book_ticket":
-                appendMessage("Για ποια παράσταση θέλετε να κάνετε κράτηση;", false);
-                break;
-            case "cancel_ticket":
-                if (prefs.contains("latestBooking")) {
-                    pendingAction = "cancel";
-                    appendMessage("Είστε σίγουροι ότι θέλετε να ακυρώσετε την κράτησή σας; (ναι/όχι)", false);
+            case "seeSchedule": {
+                // Ελέγχουμε εάν έχουμε date entity
+                if (entities.containsKey("wit$datetime:datetime")) {
+                    String date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
+                    showScheduleFor(date);
                 } else {
-                    appendMessage("Δεν έχετε κάποια κράτηση για ακύρωση.", false);
+                    showScheduleAll();
                 }
                 break;
-            case "confirm_yes":
-                if ("book".equals(pendingAction)) {
-                    saveBooking(tempBooking);
-                    resetConfirmationState();
-                    appendMessage("Η κράτησή σας επιβεβαιώθηκε!", false);
-                } else if ("cancel".equals(pendingAction)) {
-                    removeBooking();
-                    resetConfirmationState();
-                    appendMessage("Η κράτηση ακυρώθηκε.", false);
+            }
+            case "makeReservation": {
+                String date = null, showName = null;
+                Integer count = null;
+                if (entities.containsKey("wit$datetime:datetime")) {
+                    date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
+                }
+                if (entities.containsKey("show_name:show_name")) {
+                    showName = entities.get("show_name:show_name").get(0).body;
+                }
+                if (entities.containsKey("wit$number:number")) {
+                    count = Integer.valueOf(entities.get("wit$number:number").get(0).body);
+                }
+                if (date != null && showName != null && count != null) {
+                    doReservation(showName, count, date);
                 } else {
-                    appendMessage("Δεν υπάρχει ενέργεια προς επιβεβαίωση.", false);
+                    appendMessage("Για την κράτηση, πες μου τίτλο παράστασης, ημερομηνία και αριθμό εισιτηρίων.", false);
                 }
                 break;
-            case "confirm_no":
-                resetConfirmationState();
-                appendMessage("Η ενέργεια ακυρώθηκε.", false);
+            }
+            case "cancelReservation": {
+                if (entities.containsKey("reservation:reservation")) {
+                    String resId = entities.get("reservation:reservation").get(0).body;
+                    cancelReservation(resId);
+                } else {
+                    appendMessage("Δώσε τον κωδικό της κράτησης που θες να ακυρώσεις.", false);
+                }
                 break;
-            case "booking_status":
-                appendMessage(getBooking(), false);
+            }
+            case "contactStaff": {
+                if (entities.containsKey("employee:employee")) {
+                    String dept = entities.get("employee:employee").get(0).body;
+                    showContactStaff(dept);
+                } else {
+                    appendMessage("Ποιον υπεύθυνο θες να επικοινωνήσεις; (π.χ. ταμείο, διοίκηση)", false);
+                }
                 break;
+            }
             default:
-                appendMessage("Δεν κατάλαβα. Δοκιμάστε ξανά.", false);
+                appendMessage("Δεν σε κατάλαβα, δοκίμασε ξανά.", false);
         }
     }
 
@@ -155,26 +170,42 @@ public class ChatActivity extends AppCompatActivity {
         tempBooking = null;
     }
 
-    private String getShowInfo() {
-        return "🎭 Διαθέσιμες Παραστάσεις:\n" +
-                "1. Οιδίπους Τύραννος - Αίθουσα 1 - 18:00 & 21:00\n" +
-                "2. Αντιγόνη - Αίθουσα 2 - 17:30 & 20:30\n" +
-                "3. Μήδεια - Αίθουσα 1 - 20:00";
+    private void showScheduleAll() {
+        appendMessage("🎭 Το πρόγραμμα των παραστάσεων για αυτή την εβδομάδα:\n" +
+                "- Οιδίπους Τύραννος: Δευ 18:00, Τετ 21:00\n" +
+                "- Αντιγόνη: Τρι 17:30, Πεμ 20:30\n" +
+                "- Μήδεια: Σαβ 20:00", false);
     }
 
-    private void saveBooking(String data) {
-        prefs.edit().putString("latestBooking", data).apply();
+    private void showScheduleFor(String date) {
+        appendMessage(String.format(Locale.getDefault(),
+                "🎭 Πρόγραμμα για %s:\n- Αντιγόνη: 17:30 & 20:30", date), false);
     }
 
-    private void removeBooking() {
+    private void doReservation(String showName, int count, String date) {
+        String booking = String.format(Locale.getDefault(),
+                "%s στις %s, %d εισιτήρια", showName, date, count);
+        // Απλή αποθήκευση
+        prefs.edit().putString("latestBooking", booking).apply();
+        appendMessage("Η κράτησή σας: " + booking, false);
+    }
+
+    private void cancelReservation(String reservationId) {
         prefs.edit().remove("latestBooking").apply();
+        appendMessage("Ακύρωση κράτησης: " + reservationId, false);
     }
 
-    private String getBooking() {
-        String data = prefs.getString("latestBooking", null);
-        return data != null
-                ? "Η ενεργή κράτησή σας είναι: " + data
-                : "Δεν έχετε κάποια ενεργή κράτηση.";
+    private void showContactStaff(String dept) {
+        switch (dept.toLowerCase(Locale.getDefault())) {
+            case "ταμείο":
+                appendMessage("📞 Ταμείο: 210-1234567", false);
+                break;
+            case "διοίκηση":
+                appendMessage("📧 Διοίκηση: admin@theater.gr", false);
+                break;
+            default:
+                appendMessage("📞 Τηλέφωνο γενικής πληροφόρησης: 210-7654321", false);
+        }
     }
 
     private void appendMessage(String text, boolean isUser) {
