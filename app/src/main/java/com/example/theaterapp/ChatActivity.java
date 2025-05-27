@@ -14,6 +14,7 @@ import com.example.theaterapp.api.WitResponse;
 import com.example.theaterapp.api.WitService;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,7 +56,12 @@ public class ChatActivity extends AppCompatActivity {
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatRecyclerView.setAdapter(adapter);
 
-        appendMessage("Πώς μπορώ να βοηθήσω;", false);
+        appendMessage("Πώς μπορώ να βοηθήσω; Πες μου τι χρειάζεσαι ή πληκτρολόγησε τον αριθμό", false);
+        appendMessage("Διαθέσιμες υπηρεσίες:\n\n" +
+                "1\uFE0F⃣Παίζουν τώρα\n" +
+                "2\uFE0F⃣ Αγορά εισητηρίων\n" +
+                "3\uFE0F⃣ Ακύρωση αγοράς\n" +
+                "4\uFE0F⃣ Επικοινωνήστε με κάποιον βοηθό", false);
 
         // Setup Retrofit + logging for Wit.ai
         HttpLoggingInterceptor logInterceptor = new HttpLoggingInterceptor()
@@ -86,32 +92,42 @@ public class ChatActivity extends AppCompatActivity {
         callWitAI(userMessage);
     }
 
-    private void callWitAI(String userInput) {
-        witService.getMessage(WIT_VERSION, userInput, WIT_TOKEN)
-                .enqueue(new Callback<WitResponse>() {
-                    @Override
-                    public void onResponse(Call<WitResponse> call, Response<WitResponse> resp) {
-                        if (resp.isSuccessful() && resp.body() != null) {
-                            WitResponse wr = resp.body();
-                            String intent = wr.intents.isEmpty()
-                                    ? "none"
-                                    : wr.intents.get(0).name;
-                            handleWitIntent(intent, wr.entities);
-                        } else {
-                            Log.e(TAG, "Wit.ai bad response: " + resp.code());
-                            appendMessage("⚠️ Σφάλμα από Wit.ai", false);
-                        }
-                    }
 
-                    @Override
-                    public void onFailure(Call<WitResponse> call, Throwable t) {
-                        Log.e(TAG, "Wit.ai call failed", t);
-                        appendMessage("⚠️ Αποτυχία σύνδεσης με Wit.ai", false);
-                    }
-                });
+    private void callWitAI(String userInput) {
+            witService.getMessage(WIT_VERSION, userInput, WIT_TOKEN)
+                    .enqueue(new Callback<WitResponse>() {
+                        @Override
+                        public void onResponse(Call<WitResponse> call, Response<WitResponse> resp) {
+                            if (resp.isSuccessful() && resp.body() != null) {
+                                // number input matching menu available services
+                                if (userInput.matches("\\d+") && NumberInMenuServices(Integer.parseInt(userInput))) {
+                                    int num = Integer.parseInt(userInput);
+                                    String intent = mapNumberToIntent(num);
+                                    handleWitIntent(intent, Collections.emptyMap());
+                                } else {
+                                    WitResponse wr = resp.body();
+                                    String intent = wr.intents.isEmpty()
+                                            ? "none"
+                                            : wr.intents.get(0).name;
+                                    handleWitIntent(intent, wr.entities);
+                                }
+                            } else {
+                                Log.e(TAG, "Wit.ai bad response: " + resp.code());
+                                appendMessage("⚠️ Σφάλμα από Wit.ai", false);
+                            }
+                        }
+
+                        @Override
+                        public void onFailure(Call<WitResponse> call, Throwable t) {
+                            Log.e(TAG, "Wit.ai call failed", t);
+                            appendMessage("⚠️ Αποτυχία σύνδεσης με Wit.ai", false);
+                        }
+                    });
     }
 
     private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
+        if (entities == null) {String bre = "brr";}
+
         switch (intent) {
             case "seeSchedule": {
                 // Ελέγχουμε εάν έχουμε date entity
@@ -213,4 +229,34 @@ public class ChatActivity extends AppCompatActivity {
         adapter.notifyItemInserted(messageList.size() - 1);
         chatRecyclerView.scrollToPosition(messageList.size() - 1);
     }
+
+    private String mapNumberToIntent(Integer num) {
+        String intent = "";
+        switch(num) {
+            case 1:
+                intent = "seeSchedule";
+                break;
+            case 2:
+                intent = "makeReservation";
+                break;
+            case 3:
+                intent = "cancelReservation";
+                break;
+            case 4:
+                intent = "contactStaff";
+                break;
+        }
+        return intent;
+    }
+
+    private boolean NumberInMenuServices(int number) {
+        int[] menuServices = new int[] {1, 2, 3, 4};
+
+        for (int num : menuServices) {
+            if (num == number) return true;
+        }
+        return false;
+    }
 }
+
+
