@@ -55,12 +55,13 @@ public class ChatActivity extends AppCompatActivity {
         inputField = findViewById(R.id.inputField);
         sendButton = findViewById(R.id.sendButton);
         chatRecyclerView = findViewById(R.id.chatRecycler);
+        quickRepliesLayout = findViewById(R.id.quickRepliesLayout);
         prefs = getSharedPreferences("Bookings", MODE_PRIVATE);
 
         adapter = new ChatAdapter(messageList);
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatRecyclerView.setAdapter(adapter);
-        quickRepliesLayout = findViewById(R.id.quickRepliesLayout);
+
 
         appendMessage("Πώς μπορώ να βοηθήσω;", false);
         showQuickReplies();
@@ -125,7 +126,7 @@ public class ChatActivity extends AppCompatActivity {
 }
 
 
-    private void onQuickReplyClicked(String text) {
+    void onQuickReplyClicked(String text) {
         appendMessage(text, true);
         quickRepliesLayout.setVisibility(View.GONE);
 
@@ -146,51 +147,42 @@ public class ChatActivity extends AppCompatActivity {
 
             showQuickReplies();
         } else {
-            // fallback στην υπάρχουσα λογική
-            switch (text) {
-                case "Πληροφορίες παραστάσεων":
-                    handleWitIntent("seeSchedule", Collections.emptyMap());
-                    break;
-                case "Κράτηση εισιτηρίου":
-                    handleWitIntent("makeReservation", Collections.emptyMap());
-                    break;
-                case "Ακύρωση εισιτηρίου":
-                    handleWitIntent("cancelReservation", Collections.emptyMap());
-                    break;
-                case "Επικοινωνία με υπάλληλο":
-                    handleWitIntent("contactStaff", Collections.emptyMap());
-                    break;
-            }
+            // fallback σε main menu
+            appendMessage("⚠️ Σφάλμα επιλογής", false);
+            showQuickReplies();
+
         }
     }
 
+
+    // Προσθέτει μήνυμα-κουμπιά στο chat
+    private void appendButtonMessage(List<String> options) {
+        messageList.add(new ChatMessage(options));
+        adapter.notifyItemInserted(messageList.size() - 1);
+        chatRecyclerView.scrollToPosition(messageList.size() - 1);
+    }
+
+
     private void showPerformanceButtons() {
         pendingAction = "selectShow";
-        quickRepliesLayout.removeAllViews();
+
+        appendMessage("Παρακαλώ επιλέξτε παράσταση", false);
 
         List<String> shows = Arrays.asList(
                 "Οιδίπους Τύραννος",
                 "Αντιγόνη",
                 "Μήδεια"
         );
-
-        for (String show : shows) {
-            Button btn = new Button(this);
-            btn.setText(show);
-            btn.setAllCaps(false);
-            btn.setOnClickListener(v -> onQuickReplyClicked(show));
-            quickRepliesLayout.addView(btn);
-        }
-        quickRepliesLayout.setVisibility(View.VISIBLE);
+        appendButtonMessage(shows);
     }
 
-    // Εμφανίζει τα κουμπιά με τις διαθέσιμες ώρες για μια παράσταση
+
     private void showTimeButtons(String showName) {
         pendingAction = "selectTime";
-        tempBooking = showName;
-        quickRepliesLayout.removeAllViews();
+        tempBooking   = showName;
 
-        // π.χ. σταθερό παράδειγμα, μπορείς να το φορτώσεις από API
+        appendMessage("Παρακαλώ επιλέξτε ώρα", false);
+
         List<String> times;
         switch (showName) {
             case "Αντιγόνη":
@@ -205,17 +197,18 @@ public class ChatActivity extends AppCompatActivity {
             default:
                 times = Collections.emptyList();
         }
-
-        for (String t : times) {
-            Button btn = new Button(this);
-            btn.setText(t);
-            btn.setAllCaps(false);
-            btn.setOnClickListener(v -> onQuickReplyClicked(t));
-            quickRepliesLayout.addView(btn);
-        }
-        quickRepliesLayout.setVisibility(View.VISIBLE);
+        appendButtonMessage(times);
     }
 
+    private void showScheduleAll() {
+        appendMessage(
+                "🎭 Πρόγραμμα αυτή την εβδομάδα:\n" +
+                        "- Οιδίπους Τύραννος: Δευ 18:00, Τετ 21:00\n" +
+                        "- Αντιγόνη: Τρι 17:30, Πεμ 20:30\n" +
+                        "- Μήδεια: Σαβ 20:00",
+                false
+        );
+    }
 
 
     private void handleMessage() {
@@ -286,13 +279,6 @@ private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>
 //        pendingAction = null;
 //        tempBooking = null;
 //    }
-
-    private void showScheduleAll() {
-        appendMessage("🎭 Το πρόγραμμα των παραστάσεων για αυτή την εβδομάδα:\n" +
-                "- Οιδίπους Τύραννος: Δευ 18:00, Τετ 21:00\n" +
-                "- Αντιγόνη: Τρι 17:30, Πεμ 20:30\n" +
-                "- Μήδεια: Σαβ 20:00", false);
-    }
 
     private void showScheduleFor(String date) {
         appendMessage(String.format(Locale.getDefault(),
