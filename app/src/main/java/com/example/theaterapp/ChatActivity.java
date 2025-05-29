@@ -1,5 +1,6 @@
 package com.example.theaterapp;
 
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.util.Log;
@@ -8,6 +9,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -30,6 +32,8 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ChatActivity extends AppCompatActivity {
     private static final String TAG = "ChatActivity";
+    private static final String STATE_ENTER_NAME = "enterName";
+    private static final int REQUEST_CODE_SELECT_SEATS = 1001;
 
     EditText inputField;
     Button sendButton;
@@ -130,38 +134,75 @@ public class ChatActivity extends AppCompatActivity {
         appendMessage(text, true);
         quickRepliesLayout.setVisibility(View.GONE);
 
-        if ("selectShow".equals(pendingAction)) {
-            // ο χρήστης διάλεξε παράσταση
-            showTimeButtons(text);
+        switch (pendingAction) {
+            case "selectShow":
+                showTimeButtons(text);
+                break;
 
-        } else if ("selectTime".equals(pendingAction)) {
-            // ο χρήστης διάλεξε ώρα
-            String showName = tempBooking;
-            String time = text;
-            pendingAction = null;
-            tempBooking = null;
-            appendMessage("Επιλέξατε: " + showName + " στις " + time, false);
+            case "selectTime":
+                // Proceed to seat selection
+                String showName = tempBooking;
+                String showTime = text;
+                startSeatSelection(showName, showTime);
+                break;
 
-            // εδώ μπορείς να ζητήσεις και πλήθος εισιτηρίων, ή να κάνεις αμέσως κράτηση
-            // π.χ. doReservation(showName, 1, time);
+            case "selectSeat":
+                appendMessage("Έχετε επιλέξει θέση: " + text, false);
+                tempBooking = tempBooking + " - Θέση: " + text;
+                pendingAction = STATE_ENTER_NAME;
+                appendMessage("Παρακαλώ γράψτε το ονοματεπώνυμό σας για την επιβεβαίωση της κράτησης.", false);
+                break;
 
-            showQuickReplies();
-        } else {
-            // fallback σε main menu
-            appendMessage("⚠️ Σφάλμα επιλογής", false);
-            showQuickReplies();
-
+            default:
+                appendMessage("⚠️ Σφάλμα επιλογής", false);
+                showQuickReplies();
         }
     }
 
 
-    // Προσθέτει μήνυμα-κουμπιά στο chat
+
     private void appendButtonMessage(List<String> options) {
         messageList.add(new ChatMessage(options));
         adapter.notifyItemInserted(messageList.size() - 1);
         chatRecyclerView.scrollToPosition(messageList.size() - 1);
     }
 
+//    private void showSeatButtons(String showName, String time) {
+//        pendingAction = "selectSeat";
+//        tempBooking = showName + " - " + time;
+//
+//        appendMessage("Παρακαλώ επιλέξτε θέση", false);
+//
+//        List<String> seats = Arrays.asList("A1", "A2", "B1", "B2", "Γ1", "Γ2");
+//        appendButtonMessage(seats);
+//    }
+
+    private void startSeatSelection(String showName, String time) {
+        tempBooking = showName + " στις " + time;
+        Intent intent = new Intent(this, SeatSelectionActivity.class);
+        intent.putExtra("showName", showName);
+        intent.putExtra("showTime", time);
+        startActivityForResult(intent, REQUEST_CODE_SELECT_SEATS);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode,
+                                    @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CODE_SELECT_SEATS && resultCode == RESULT_OK && data != null) {
+            String[] seats = data.getStringArrayExtra("selectedSeats");
+            if (seats != null && seats.length > 0) {
+                String sel = String.join(", ", seats);
+                appendMessage("Έχετε επιλέξει θέσεις: " + sel, false);
+                // πλέον ζητάμε το όνομα
+                pendingAction = STATE_ENTER_NAME;
+                appendMessage("Παρακαλώ γράψτε το ονοματεπώνυμό σας για επιβεβαίωση.", false);
+            } else {
+                appendMessage("Δεν επιλέχθηκε καμία θέση.", false);
+                showQuickReplies();
+            }
+        }
+    }
 
     private void showPerformanceButtons() {
         pendingAction = "selectShow";
@@ -212,6 +253,21 @@ public class ChatActivity extends AppCompatActivity {
 
 
     private void handleMessage() {
+
+        if (STATE_ENTER_NAME.equals(pendingAction)) {
+            String fullName = inputField.getText().toString().trim();
+            if (fullName.isEmpty()) return;
+            String confirmedBooking = tempBooking + " - Όνομα: " + fullName;
+            prefs.edit().putString("latestBooking", confirmedBooking).apply();
+            appendMessage("✅ Η κράτηση σας επιβεβαιώθηκε για: " + confirmedBooking, false);
+
+            // Reset state
+            pendingAction = null;
+            tempBooking = null;
+            inputField.setText("");
+            showQuickReplies();
+            return;
+        }
         String userMessage = inputField.getText().toString().trim();
         if (userMessage.isEmpty()) return;
 
