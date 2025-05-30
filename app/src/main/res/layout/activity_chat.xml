@@ -45,5 +45,15 @@
             android:layout_height="wrap_content"
             android:text="Αποστολή"
             android:backgroundTint="@color/turquoise"/>
+
+        <ImageButton
+            android:id="@+id/walletButton"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            android:src="@drawable/wallet_icon"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Wallet"
+            android:layout_gravity="end"
+            android:padding="8dp" />
     </LinearLayout>
 </LinearLayout>

@@ -8,6 +8,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ImageButton;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -25,6 +26,13 @@ import java.util.Map;
 import java.util.Collections;
 import java.util.UUID;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.lang.reflect.Type;
+
 
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
@@ -35,6 +43,7 @@ public class ChatActivity extends AppCompatActivity {
     private static final String TAG = "ChatActivity";
     private static final String STATE_ENTER_NAME = "enterName";
     private static final int REQUEST_CODE_SELECT_SEATS = 1001;
+    private static final int TOTAL_SEATS = 30;
     private static final String STATE_ENTER_COUNT = "enterCount";
     private int ticketCount = 0;
 
@@ -53,6 +62,13 @@ public class ChatActivity extends AppCompatActivity {
     private final String WIT_VERSION = "20250527";
     private final String WIT_TOKEN = "Bearer " + BuildConfig.WIT_AI_SERVER_TOKEN;
 
+    private List<Reservation> reservations = new ArrayList<>();
+    private final String RES_FILE = "reservations.json";
+
+    private String selectedShowName;
+    private String selectedShowTime;
+    private List<String> selectedSeatsList = new ArrayList<>();
+
     private LinearLayout quickRepliesLayout;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +77,14 @@ public class ChatActivity extends AppCompatActivity {
 
         inputField = findViewById(R.id.inputField);
         sendButton = findViewById(R.id.sendButton);
+
+        ImageButton walletButton = findViewById(R.id.walletButton);
+        walletButton.setOnClickListener(v -> {
+            Intent intent = new Intent(ChatActivity.this, WalletActivity.class);
+            startActivity(intent);
+        });
+
+
         chatRecyclerView = findViewById(R.id.chatRecycler);
         quickRepliesLayout = findViewById(R.id.quickRepliesLayout);
         prefs = getSharedPreferences("Bookings", MODE_PRIVATE);
@@ -68,6 +92,10 @@ public class ChatActivity extends AppCompatActivity {
         adapter = new ChatAdapter(messageList);
         chatRecyclerView.setLayoutManager(new LinearLayoutManager(this));
         chatRecyclerView.setAdapter(adapter);
+        Log.d("ChatActivity", "Internal files dir = " + getFilesDir().getAbsolutePath());
+
+
+        loadReservations();
 
 
         appendMessage("Πώς μπορώ να βοηθήσω;", false);
@@ -96,6 +124,30 @@ public class ChatActivity extends AppCompatActivity {
         });
     }
 
+    private void loadReservations() {
+        try {
+            File f = new File(getFilesDir(), RES_FILE);
+            if (!f.exists()) return;
+            FileReader reader = new FileReader(f);
+            Type listType = new TypeToken<List<Reservation>>(){}.getType();
+            reservations = new Gson().fromJson(reader, listType);
+            reader.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void saveReservations() {
+        try {
+            File f = new File(getFilesDir(), RES_FILE);
+            FileWriter writer = new FileWriter(f, false);
+            new Gson().toJson(reservations, writer);
+            writer.flush();
+            writer.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
     private void showQuickReplies() {
         quickRepliesLayout.removeAllViews();
         String[] options = new String[]{
@@ -139,13 +191,14 @@ public class ChatActivity extends AppCompatActivity {
 
         switch (pendingAction) {
             case "selectShow":
+                selectedShowName = text;
                 showTimeButtons(text);
                 break;
 
             case "selectTime":
-                // Proceed to seat selection
+                selectedShowTime = text;
                 pendingAction = STATE_ENTER_COUNT;
-                tempBooking = tempBooking + " στις " + text;
+                tempBooking = selectedShowName + " στις " + selectedShowTime;
                 appendMessage("Πόσα εισιτήρια θέλετε;", false);
                 break;
 
@@ -171,20 +224,37 @@ public class ChatActivity extends AppCompatActivity {
     }
 
 
-    private void startSeatSelection(String showAndTime, int maxSeats) {
+    private void startSeatSelection(int maxSeats) {
+
+        List<String> occupied = new ArrayList<>();
+        for (Reservation r : reservations) {
+            if (r.showName.equals(selectedShowName) &&
+                    r.showTime.equals(selectedShowTime)) {
+                occupied.addAll(r.seats);
+            }
+        }
+
         Intent intent = new Intent(this, SeatSelectionActivity.class);
-        intent.putExtra("showAndTime", showAndTime);
+        intent.putExtra("showName", selectedShowName);
+        intent.putExtra("showTime", selectedShowTime);
         intent.putExtra("maxSeats", maxSeats);
+        intent.putStringArrayListExtra("reservedSeats",
+                new ArrayList<>(occupied));
         startActivityForResult(intent, REQUEST_CODE_SELECT_SEATS);
+
 
         pendingAction = null;
     }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode,
                                     @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_CODE_SELECT_SEATS && resultCode == RESULT_OK && data != null) {
             String[] seats = data.getStringArrayExtra("selectedSeats");
+            selectedSeatsList = seats != null
+                    ? Arrays.asList(seats)
+                    : Collections.emptyList();
             if (seats != null && seats.length > 0) {
                 String sel = String.join(", ", seats);
                 appendMessage("Έχετε επιλέξει θέσεις: " + sel, false);
@@ -254,36 +324,79 @@ public class ChatActivity extends AppCompatActivity {
 
         if (STATE_ENTER_COUNT.equals(pendingAction)) {
             try {
-                ticketCount = Integer.parseInt(text);
-                appendMessage("Επιβεβαιώσατε " + ticketCount + " εισιτήρια.", false);
+                int requested = Integer.parseInt(text);
+
+                // Υπολογίζουμε πόσες θέσεις είναι ήδη κατειλημμένες για αυτό το show+time
+                int occupied = 0;
+                for (Reservation r : reservations) {
+                    if (r.showName.equals(selectedShowName)
+                            && r.showTime.equals(selectedShowTime)) {
+                        occupied += r.seats.size();
+                    }
+                }
+                int available = TOTAL_SEATS - occupied;
+
+                if (requested > available) {
+                    appendMessage(
+                            "❌ Διαθέσιμες μόνο " + available +
+                                    " θέσεις για αυτή την παράσταση/ώρα.\n" +
+                                    "Παρακαλώ δώστε νέο αριθμό εισιτηρίων.",
+                            false
+                    );
+                    return;
+                }
+
+                // ΟΚ, αποθηκεύουμε το έγκυρο αίτημα
+                ticketCount = requested;
+                appendMessage(
+                        "Επιβεβαιώσατε " + ticketCount + " εισιτήρια.",
+                        false
+                );
                 inputField.setText("");
-                // ξεκινάμε την οθόνη επιλογής καθισμάτων, με όριο ticketCount
-                startSeatSelection(tempBooking, ticketCount);
-                return;
+
+                // ξεκινάμε επιλογή καθισμάτων
+                startSeatSelection(ticketCount);
+
             } catch (NumberFormatException e) {
-                appendMessage("Παρακαλώ εισάγετε έγκυρο αριθμό.", false);
-                return;
+                appendMessage("Παρακαλώ εισάγετε έναν έγκυρο αριθμό.", false);
             }
+            return;
         }
 
         // 2) Αν περιμένουμε το όνομα για επιβεβαίωση
         if (STATE_ENTER_NAME.equals(pendingAction)) {
             String fullName = text;
-            //String confirmedBooking = tempBooking + " - Όνομα: " + fullName;
+
             String bookingId = UUID.randomUUID()
                     .toString()
                     .substring(0, 8)
                     .toUpperCase();
-            // -----------------------------------
+
+            Reservation r = new Reservation(
+                    bookingId,
+                    selectedShowName,
+                    selectedShowTime,
+                    ticketCount,
+                    selectedSeatsList,
+                    fullName
+            );
+
+            // προσθήκη & αποθήκευση
+            reservations.add(r);
+            saveReservations();
 
             String confirmed = String.format(
-                    "%s - Όνομα: %s\nΚωδικός κράτησης: %s",
-                    tempBooking, fullName, bookingId
+                    "%s στις %s\nΘέσεις: %s\nΌνομα: %s\nΚωδικός: %s",
+                    selectedShowName,
+                    selectedShowTime,
+                    String.join(", ", selectedSeatsList),
+                    fullName,
+                    bookingId
             );
-            prefs.edit()
-                    .putString("latestBooking", confirmed)
-                    .putString("latestBookingId", bookingId)
-                    .apply();
+//            prefs.edit()
+//                    .putString("latestBooking", confirmed)
+//                    .putString("latestBookingId", bookingId)
+//                    .apply();
             appendMessage("✅ Η κράτησή σας επιβεβαιώθηκε:\n" + confirmed, false);
 
             // επαναφορά
@@ -294,10 +407,12 @@ public class ChatActivity extends AppCompatActivity {
             return;
         }
 
-        // 3) Κανονική ροή chat
-        appendMessage(text, true);
+        pendingAction = null;
+        tempBooking   = null;
+        selectedSeatsList.clear();
         inputField.setText("");
-        callWitAI(text);
+        showQuickReplies();
+        return;
     }
 
     private void callWitAI(String userInput) {

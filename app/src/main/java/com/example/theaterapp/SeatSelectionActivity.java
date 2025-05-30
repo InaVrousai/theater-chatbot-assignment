@@ -18,6 +18,7 @@ public class SeatSelectionActivity extends AppCompatActivity {
     private GridLayout seatGrid;
     private Button confirmBtn;
     private List<String> selectedSeats = new ArrayList<>();
+    private List<String> reservedSeats = new ArrayList<>();
     private int maxSeats;
 
 
@@ -37,6 +38,12 @@ public class SeatSelectionActivity extends AppCompatActivity {
         maxSeats = getIntent().getIntExtra("maxSeats", 1);
 
 
+
+
+        maxSeats      = getIntent().getIntExtra("maxSeats", 1);
+        reservedSeats = getIntent().getStringArrayListExtra("reservedSeats");
+        if (reservedSeats == null) reservedSeats = new ArrayList<>();
+
         seatGrid   = findViewById(R.id.seatGrid);
         confirmBtn = findViewById(R.id.confirmButton);
         confirmBtn.setEnabled(false);
@@ -44,11 +51,15 @@ public class SeatSelectionActivity extends AppCompatActivity {
 
         int colCount = 6;
         seatGrid.setColumnCount(colCount);
+
+        float density = getResources().getDisplayMetrics().density;
+        int sizePx = (int)(48 * density + .5f); // ή κάνε reference σε R.dimen.seat_size
+
         for (int i = 0; i < allSeats.size(); i++) {
             String code = allSeats.get(i);
             Button btn = new Button(this);
             btn.setText(code);
-            //btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
             btn.setAllCaps(false);
 
             GridLayout.LayoutParams p = new GridLayout.LayoutParams();
@@ -59,7 +70,14 @@ public class SeatSelectionActivity extends AppCompatActivity {
             p.setMargins(8,8,8,8);
             btn.setLayoutParams(p);
 
+            if (reservedSeats.contains(code)) {
+                btn.setEnabled(false);
+                btn.setAlpha(0.3f);
+            }
+
+
             btn.setOnClickListener(v -> {
+                if (!btn.isEnabled()) return;
                 if (selectedSeats.contains(code)) {
                     selectedSeats.remove(code);
                     btn.setAlpha(1f);

@@ -31,6 +31,8 @@
         </activity>
         <activity android:name=".SeatSelectionActivity"/>
 
+        <activity android:name=".WalletActivity"/>
+
     </application>
 
 
