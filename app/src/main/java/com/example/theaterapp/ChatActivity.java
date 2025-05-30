@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Collections;
+import java.util.UUID;
 
 
 import okhttp3.OkHttpClient;
@@ -250,7 +251,7 @@ public class ChatActivity extends AppCompatActivity {
         String text = inputField.getText().toString().trim();
         if (text.isEmpty()) return;
 
-        // 1) Αν περιμένουμε αριθμό εισιτηρίων
+
         if (STATE_ENTER_COUNT.equals(pendingAction)) {
             try {
                 ticketCount = Integer.parseInt(text);
@@ -268,9 +269,22 @@ public class ChatActivity extends AppCompatActivity {
         // 2) Αν περιμένουμε το όνομα για επιβεβαίωση
         if (STATE_ENTER_NAME.equals(pendingAction)) {
             String fullName = text;
-            String confirmedBooking = tempBooking + " - Όνομα: " + fullName;
-            prefs.edit().putString("latestBooking", confirmedBooking).apply();
-            appendMessage("✅ Η κράτησή σας επιβεβαιώθηκε: " + confirmedBooking, false);
+            //String confirmedBooking = tempBooking + " - Όνομα: " + fullName;
+            String bookingId = UUID.randomUUID()
+                    .toString()
+                    .substring(0, 8)
+                    .toUpperCase();
+            // -----------------------------------
+
+            String confirmed = String.format(
+                    "%s - Όνομα: %s\nΚωδικός κράτησης: %s",
+                    tempBooking, fullName, bookingId
+            );
+            prefs.edit()
+                    .putString("latestBooking", confirmed)
+                    .putString("latestBookingId", bookingId)
+                    .apply();
+            appendMessage("✅ Η κράτησή σας επιβεβαιώθηκε:\n" + confirmed, false);
 
             // επαναφορά
             pendingAction = null;
