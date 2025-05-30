@@ -34,6 +34,8 @@ public class ChatActivity extends AppCompatActivity {
     private static final String TAG = "ChatActivity";
     private static final String STATE_ENTER_NAME = "enterName";
     private static final int REQUEST_CODE_SELECT_SEATS = 1001;
+    private static final String STATE_ENTER_COUNT = "enterCount";
+    private int ticketCount = 0;
 
     EditText inputField;
     Button sendButton;
@@ -141,9 +143,9 @@ public class ChatActivity extends AppCompatActivity {
 
             case "selectTime":
                 // Proceed to seat selection
-                String showName = tempBooking;
-                String showTime = text;
-                startSeatSelection(showName, showTime);
+                pendingAction = STATE_ENTER_COUNT;
+                tempBooking = tempBooking + " στις " + text;
+                appendMessage("Πόσα εισιτήρια θέλετε;", false);
                 break;
 
             case "selectSeat":
@@ -167,24 +169,15 @@ public class ChatActivity extends AppCompatActivity {
         chatRecyclerView.scrollToPosition(messageList.size() - 1);
     }
 
-//    private void showSeatButtons(String showName, String time) {
-//        pendingAction = "selectSeat";
-//        tempBooking = showName + " - " + time;
-//
-//        appendMessage("Παρακαλώ επιλέξτε θέση", false);
-//
-//        List<String> seats = Arrays.asList("A1", "A2", "B1", "B2", "Γ1", "Γ2");
-//        appendButtonMessage(seats);
-//    }
 
-    private void startSeatSelection(String showName, String time) {
-        tempBooking = showName + " στις " + time;
+    private void startSeatSelection(String showAndTime, int maxSeats) {
         Intent intent = new Intent(this, SeatSelectionActivity.class);
-        intent.putExtra("showName", showName);
-        intent.putExtra("showTime", time);
+        intent.putExtra("showAndTime", showAndTime);
+        intent.putExtra("maxSeats", maxSeats);
         startActivityForResult(intent, REQUEST_CODE_SELECT_SEATS);
-    }
 
+        pendingAction = null;
+    }
     @Override
     protected void onActivityResult(int requestCode, int resultCode,
                                     @Nullable Intent data) {
@@ -252,29 +245,45 @@ public class ChatActivity extends AppCompatActivity {
     }
 
 
-    private void handleMessage() {
 
+    protected void handleMessage() {
+        String text = inputField.getText().toString().trim();
+        if (text.isEmpty()) return;
+
+        // 1) Αν περιμένουμε αριθμό εισιτηρίων
+        if (STATE_ENTER_COUNT.equals(pendingAction)) {
+            try {
+                ticketCount = Integer.parseInt(text);
+                appendMessage("Επιβεβαιώσατε " + ticketCount + " εισιτήρια.", false);
+                inputField.setText("");
+                // ξεκινάμε την οθόνη επιλογής καθισμάτων, με όριο ticketCount
+                startSeatSelection(tempBooking, ticketCount);
+                return;
+            } catch (NumberFormatException e) {
+                appendMessage("Παρακαλώ εισάγετε έγκυρο αριθμό.", false);
+                return;
+            }
+        }
+
+        // 2) Αν περιμένουμε το όνομα για επιβεβαίωση
         if (STATE_ENTER_NAME.equals(pendingAction)) {
-            String fullName = inputField.getText().toString().trim();
-            if (fullName.isEmpty()) return;
+            String fullName = text;
             String confirmedBooking = tempBooking + " - Όνομα: " + fullName;
             prefs.edit().putString("latestBooking", confirmedBooking).apply();
-            appendMessage("✅ Η κράτηση σας επιβεβαιώθηκε για: " + confirmedBooking, false);
+            appendMessage("✅ Η κράτησή σας επιβεβαιώθηκε: " + confirmedBooking, false);
 
-            // Reset state
+            // επαναφορά
             pendingAction = null;
-            tempBooking = null;
+            tempBooking   = null;
             inputField.setText("");
             showQuickReplies();
             return;
         }
-        String userMessage = inputField.getText().toString().trim();
-        if (userMessage.isEmpty()) return;
 
-        appendMessage(userMessage, true);
+        // 3) Κανονική ροή chat
+        appendMessage(text, true);
         inputField.setText("");
-
-        callWitAI(userMessage);
+        callWitAI(text);
     }
 
     private void callWitAI(String userInput) {
@@ -331,10 +340,7 @@ private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>
 }
 
 
-//    private void resetConfirmationState() {
-//        pendingAction = null;
-//        tempBooking = null;
-//    }
+
 
     private void showScheduleFor(String date) {
         appendMessage(String.format(Locale.getDefault(),

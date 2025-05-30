@@ -6,6 +6,7 @@ import android.util.TypedValue;
 import android.view.View;
 import android.widget.Button;
 import android.widget.GridLayout;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -17,6 +18,7 @@ public class SeatSelectionActivity extends AppCompatActivity {
     private GridLayout seatGrid;
     private Button confirmBtn;
     private List<String> selectedSeats = new ArrayList<>();
+    private int maxSeats;
 
 
     private final List<String> allSeats = Arrays.asList(
@@ -32,8 +34,12 @@ public class SeatSelectionActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_seat_selection);
 
+        maxSeats = getIntent().getIntExtra("maxSeats", 1);
+
+
         seatGrid   = findViewById(R.id.seatGrid);
         confirmBtn = findViewById(R.id.confirmButton);
+        confirmBtn.setEnabled(false);
 
 
         int colCount = 6;
@@ -42,7 +48,7 @@ public class SeatSelectionActivity extends AppCompatActivity {
             String code = allSeats.get(i);
             Button btn = new Button(this);
             btn.setText(code);
-            btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            //btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
             btn.setAllCaps(false);
 
             GridLayout.LayoutParams p = new GridLayout.LayoutParams();
@@ -57,10 +63,15 @@ public class SeatSelectionActivity extends AppCompatActivity {
                 if (selectedSeats.contains(code)) {
                     selectedSeats.remove(code);
                     btn.setAlpha(1f);
-                } else {
+                } else if (selectedSeats.size() < maxSeats) {
                     selectedSeats.add(code);
                     btn.setAlpha(0.5f);
+                } else {
+                    Toast.makeText(this,
+                            "Μπορείτε να επιλέξετε έως " + maxSeats + " θέσεις",
+                            Toast.LENGTH_SHORT).show();
                 }
+                confirmBtn.setEnabled(selectedSeats.size() == maxSeats);
             });
             seatGrid.addView(btn);
         }
