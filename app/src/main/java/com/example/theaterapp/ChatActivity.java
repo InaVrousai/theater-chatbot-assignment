@@ -159,44 +159,44 @@ public class ChatActivity extends AppCompatActivity {
                 "Κράτηση εισιτηρίου",
                 "Ακύρωση εισιτηρίου",
                 "Επικοινωνία με υπάλληλο"
-    };
-    for (String opt : options) {
-        Button btn = new Button(this);
-        btn.setText(opt);
-        btn.setAllCaps(false);
-        btn.setOnClickListener(v -> {
-            quickRepliesLayout.setVisibility(View.GONE);
-            appendMessage(opt, true);
-            // χειρισμός χωρίς free-text
-            switch (opt) {
-                case "Πληροφορίες παραστάσεων":
-                    handleWitIntent("seeSchedule", Collections.emptyMap());
-                    break;
-                case "Κράτηση εισιτηρίου":
-                    handleWitIntent("makeReservation", Collections.emptyMap());
-                    break;
-                case "Ακύρωση εισιτηρίου":
-                    handleWitIntent("cancelReservation", Collections.emptyMap());
-                    break;
-                case "Επικοινωνία με υπάλληλο":
-                    Log.d(TAG, "Πατήθηκε ‘Επικοινωνία με υπάλληλο’ → δοκιμή startActivity χωρίς resolveActivity");
-                    Toast.makeText(ChatActivity.this, "Προσπάθεια να ανοίξω το Dialer…", Toast.LENGTH_SHORT).show();
+        };
+        for (String opt : options) {
+            Button btn = new Button(this);
+            btn.setText(opt);
+            btn.setAllCaps(false);
+            btn.setOnClickListener(v -> {
+                quickRepliesLayout.setVisibility(View.GONE);
+                appendMessage(opt, true);
+                // χειρισμός χωρίς free-text
+                switch (opt) {
+                    case "Πληροφορίες παραστάσεων":
+                        handleWitIntent("seeSchedule", Collections.emptyMap());
+                        break;
+                    case "Κράτηση εισιτηρίου":
+                        handleWitIntent("makeReservation", Collections.emptyMap());
+                        break;
+                    case "Ακύρωση εισιτηρίου":
+                        handleWitIntent("cancelReservation", Collections.emptyMap());
+                        break;
+                    case "Επικοινωνία με υπάλληλο":
+                        Log.d(TAG, "Πατήθηκε ‘Επικοινωνία με υπάλληλο’ → δοκιμή startActivity χωρίς resolveActivity");
+                        Toast.makeText(ChatActivity.this, "Προσπάθεια να ανοίξω το Dialer…", Toast.LENGTH_SHORT).show();
 
-                    Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + EMPLOYEE_PHONE_NUMBER));
-                    try {
-                        startActivity(dialIntent);
-                    } catch (android.content.ActivityNotFoundException ex) {
-                        // Αν πάλι δεν υπάρχει κάποια εφαρμογή να το αναλάβει:
-                        Log.e(TAG, "ActivityNotFoundException για ACTION_DIAL", ex);
-                        Toast.makeText(this, "Δεν βρέθηκε τηλεφωνική εφαρμογή (Exception)", Toast.LENGTH_LONG).show();
-                    }
-                    break;
-            }
-        });
-        quickRepliesLayout.addView(btn);
+                        Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + EMPLOYEE_PHONE_NUMBER));
+                        try {
+                            startActivity(dialIntent);
+                        } catch (android.content.ActivityNotFoundException ex) {
+                            // Αν πάλι δεν υπάρχει κάποια εφαρμογή να το αναλάβει:
+                            Log.e(TAG, "ActivityNotFoundException για ACTION_DIAL", ex);
+                            Toast.makeText(this, "Δεν βρέθηκε τηλεφωνική εφαρμογή (Exception)", Toast.LENGTH_LONG).show();
+                        }
+                        break;
+                }
+            });
+            quickRepliesLayout.addView(btn);
+        }
+        quickRepliesLayout.setVisibility(View.VISIBLE);
     }
-    quickRepliesLayout.setVisibility(View.VISIBLE);
-}
 
 
     void onQuickReplyClicked(String text) {
@@ -335,6 +335,36 @@ public class ChatActivity extends AppCompatActivity {
         String text = inputField.getText().toString().trim();
         if (text.isEmpty()) return;
 
+        if ("cancelReservation".equals(pendingAction)) {
+            String cancelCode = inputField.getText().toString().trim();
+            inputField.setText("");
+
+            if (cancelCode.isEmpty()) {
+                appendMessage("⚠️ Ο κωδικός δεν μπορεί να είναι κενός.", false);
+                return;
+            }
+
+            // Find reservation
+            Reservation toCancel = null;
+            for (Reservation r : reservations) {
+                if (r.id.equals(cancelCode)) {
+                    toCancel = r;
+                    break;
+                }
+            }
+
+            if (toCancel != null) {
+                reservations.remove(toCancel);
+                saveReservations();
+                appendMessage("❌ Η κράτηση με κωδικό " + cancelCode + " ακυρώθηκε.", false);
+            } else {
+                appendMessage("❌ Δεν βρέθηκε κράτηση με αυτόν τον κωδικό.", false);
+            }
+
+            pendingAction = null;
+            showQuickReplies();
+            return;
+        }
 
         if (STATE_ENTER_COUNT.equals(pendingAction)) {
             try {
@@ -381,10 +411,8 @@ public class ChatActivity extends AppCompatActivity {
         if (STATE_ENTER_NAME.equals(pendingAction)) {
             String fullName = text;
 
-            String bookingId = UUID.randomUUID()
-                    .toString()
-                    .substring(0, 8)
-                    .toUpperCase();
+            String bookingId = String.format("%05d", (int)(Math.random() * 100000));
+
 
             Reservation r = new Reservation(
                     bookingId,
@@ -407,12 +435,15 @@ public class ChatActivity extends AppCompatActivity {
                     fullName,
                     bookingId
             );
-
+//            prefs.edit()
+//                    .putString("latestBooking", confirmed)
+//                    .putString("latestBookingId", bookingId)
+//                    .apply();
             appendMessage("✅ Η κράτησή σας επιβεβαιώθηκε:\n" + confirmed, false);
 
             SharedPreferences.Editor editor = prefs.edit();
             editor.putString("latestBooking", confirmed);
-            
+
             editor.putString("latestCancelCode", bookingId);
             editor.apply();
 
@@ -459,31 +490,34 @@ public class ChatActivity extends AppCompatActivity {
                 });
     }
 
-private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
-    switch (intent) {
-        case "seeSchedule":
-            if (entities.containsKey("wit$datetime:datetime")) {
-                String date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
-                showScheduleFor(date);
-            } else {
-                showScheduleAll();
-            }
-            break;
-        case "makeReservation":
-            showPerformanceButtons();
-            return;
-        case "cancelReservation":
-            appendMessage("Παρακαλώ δώστε τον κωδικό κράτησης για ακύρωση.", false);
-            break;
-        case "contactStaff":
-            appendMessage("Παρακαλώ επιλέξτε υπάλληλο: ταμείο ή διοίκηση.", false);
-            break;
-        default:
-            appendMessage("Δεν σε κατάλαβα, δοκίμασε ξανά.", false);
+    private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>> entities) {
+        switch (intent) {
+            case "seeSchedule":
+                if (entities.containsKey("wit$datetime:datetime")) {
+                    String date = entities.get("wit$datetime:datetime").get(0).values.get(0).value;
+                    showScheduleFor(date);
+                } else {
+                    showScheduleAll();
+                }
+                break;
+            case "makeReservation":
+                showPerformanceButtons();
+                return;
+            case "cancelReservation":
+                appendMessage("Παρακαλώ δώστε τον κωδικό κράτησης για ακύρωση.", false);
+                pendingAction = "cancelReservation";  // This line is essential
+                break;
+
+            case "contactStaff":
+                appendMessage("Παρακαλώ επιλέξτε υπάλληλο: ταμείο ή διοίκηση.", false);
+                break;
+
+            default:
+                appendMessage("Δεν σε κατάλαβα, δοκίμασε ξανά.", false);
+        }
+        // μετά από κάθε bot response, εμφάνισε ξανά επιλογές
+        showQuickReplies();
     }
-    // μετά από κάθε bot response, εμφάνισε ξανά επιλογές
-    showQuickReplies();
-}
 
 
 
