@@ -335,6 +335,36 @@ public class ChatActivity extends AppCompatActivity {
         String text = inputField.getText().toString().trim();
         if (text.isEmpty()) return;
 
+        if ("cancelReservation".equals(pendingAction)) {
+            String cancelCode = inputField.getText().toString().trim();
+            inputField.setText("");
+
+            if (cancelCode.isEmpty()) {
+                appendMessage("⚠️ Ο κωδικός δεν μπορεί να είναι κενός.", false);
+                return;
+            }
+
+            // Find reservation
+            Reservation toCancel = null;
+            for (Reservation r : reservations) {
+                if (r.id.equals(cancelCode)) {
+                    toCancel = r;
+                    break;
+                }
+            }
+
+            if (toCancel != null) {
+                reservations.remove(toCancel);
+                saveReservations();
+                appendMessage("❌ Η κράτηση με κωδικό " + cancelCode + " ακυρώθηκε.", false);
+            } else {
+                appendMessage("❌ Δεν βρέθηκε κράτηση με αυτόν τον κωδικό.", false);
+            }
+
+            pendingAction = null;
+            showQuickReplies();
+            return;
+        }
 
         if (STATE_ENTER_COUNT.equals(pendingAction)) {
             try {
@@ -381,10 +411,8 @@ public class ChatActivity extends AppCompatActivity {
         if (STATE_ENTER_NAME.equals(pendingAction)) {
             String fullName = text;
 
-            String bookingId = UUID.randomUUID()
-                    .toString()
-                    .substring(0, 8)
-                    .toUpperCase();
+            String bookingId = String.format("%05d", (int)(Math.random() * 100000));
+
 
             Reservation r = new Reservation(
                     bookingId,
@@ -471,10 +499,13 @@ private void handleWitIntent(String intent, Map<String, List<WitResponse.Entity>
             return;
         case "cancelReservation":
             appendMessage("Παρακαλώ δώστε τον κωδικό κράτησης για ακύρωση.", false);
+            pendingAction = "cancelReservation";  // This line is essential
             break;
+
         case "contactStaff":
             appendMessage("Παρακαλώ επιλέξτε υπάλληλο: ταμείο ή διοίκηση.", false);
             break;
+
         default:
             appendMessage("Δεν σε κατάλαβα, δοκίμασε ξανά.", false);
     }
