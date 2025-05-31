@@ -2,6 +2,7 @@ package com.example.theaterapp;
 
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
@@ -9,6 +10,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ImageButton;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -41,6 +43,8 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class ChatActivity extends AppCompatActivity {
     private static final String TAG = "ChatActivity";
+
+    private static final String EMPLOYEE_PHONE_NUMBER = "2101234567";
     private static final String STATE_ENTER_NAME = "enterName";
     private static final int REQUEST_CODE_SELECT_SEATS = 1001;
     private static final int TOTAL_SEATS = 30;
@@ -175,7 +179,17 @@ public class ChatActivity extends AppCompatActivity {
                     handleWitIntent("cancelReservation", Collections.emptyMap());
                     break;
                 case "Επικοινωνία με υπάλληλο":
-                    handleWitIntent("contactStaff", Collections.emptyMap());
+                    Log.d(TAG, "Πατήθηκε ‘Επικοινωνία με υπάλληλο’ → δοκιμή startActivity χωρίς resolveActivity");
+                    Toast.makeText(ChatActivity.this, "Προσπάθεια να ανοίξω το Dialer…", Toast.LENGTH_SHORT).show();
+
+                    Intent dialIntent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + EMPLOYEE_PHONE_NUMBER));
+                    try {
+                        startActivity(dialIntent);
+                    } catch (android.content.ActivityNotFoundException ex) {
+                        // Αν πάλι δεν υπάρχει κάποια εφαρμογή να το αναλάβει:
+                        Log.e(TAG, "ActivityNotFoundException για ACTION_DIAL", ex);
+                        Toast.makeText(this, "Δεν βρέθηκε τηλεφωνική εφαρμογή (Exception)", Toast.LENGTH_LONG).show();
+                    }
                     break;
             }
         });
