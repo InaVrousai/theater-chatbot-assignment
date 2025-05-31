@@ -407,13 +407,16 @@ public class ChatActivity extends AppCompatActivity {
                     fullName,
                     bookingId
             );
-//            prefs.edit()
-//                    .putString("latestBooking", confirmed)
-//                    .putString("latestBookingId", bookingId)
-//                    .apply();
+
             appendMessage("✅ Η κράτησή σας επιβεβαιώθηκε:\n" + confirmed, false);
 
-            // επαναφορά
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString("latestBooking", confirmed);
+            
+            editor.putString("latestCancelCode", bookingId);
+            editor.apply();
+
+
             pendingAction = null;
             tempBooking   = null;
             inputField.setText("");
