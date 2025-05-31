@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:orientation="vertical"
     android:padding="16dp"
     android:layout_width="match_parent"
@@ -48,12 +49,14 @@
 
         <ImageButton
             android:id="@+id/walletButton"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
             android:src="@drawable/wallet_icon"
+            android:contentDescription="wallet_button"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Wallet"
-            android:layout_gravity="end"
-            android:padding="8dp" />
-    </LinearLayout>
+            android:scaleType="centerInside"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"/>
+        </LinearLayout>
+
 </LinearLayout>

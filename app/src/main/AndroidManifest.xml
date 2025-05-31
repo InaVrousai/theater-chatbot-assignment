@@ -32,6 +32,7 @@
         <activity android:name=".SeatSelectionActivity"/>
 
         <activity android:name=".WalletActivity"/>
+        <activity android:name=".TestWalletActivity" />
 
     </application>
 
